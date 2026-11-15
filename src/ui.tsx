@@ -59,9 +59,9 @@ export function Arrow({ x, y, dir = 'r' }: { x: number; y: number; dir?: 'r' | '
 }
 
 /** Nodo de un árbol: caja con texto centrado. */
-export function TreeNode({ x, y, w, label, fill, sub }: { x: number; y: number; w: number; label: string; fill?: boolean; sub?: ReactNode }) {
+export function TreeNode({ x, y, w, label, fill, sub, hot }: { x: number; y: number; w: number; label: string; fill?: boolean; sub?: ReactNode; hot?: boolean }) {
   return (
-    <g>
+    <g className={hot ? 'hot' : undefined}>
       <rect className={`node${fill ? ' fill' : ''}`} x={x - w / 2} y={y - 28} width={w} height={56} />
       <text className={`st big${fill ? ' inv' : ''}`} x={x} y={y + 11} textAnchor="middle">{label}</text>
       {sub}

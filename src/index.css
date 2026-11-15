@@ -102,6 +102,21 @@ svg { overflow: visible; }
 .sl.soft { fill: var(--ink-soft); }
 .node { fill: #fff; stroke: var(--ink); stroke-width: 5; }
 .node.fill { fill: var(--ink); }
+.node { transition: fill 0.35s var(--ease); }
+.hot .node { fill: var(--line); }
+.hot text.st { fill: var(--ink); }
+.fade { transition: opacity 0.6s var(--ease); }
+.fade.off { opacity: 0.16; }
+
+/* ---- Etapas de GCC: una vía con el archivo como vagón ---- */
+.gtrack { fill: none; stroke-width: 14; stroke-linecap: round; }
+.gstop { fill: var(--ground); stroke: var(--ink); stroke-width: 6; transition: fill 0.5s var(--ease) 0.4s; }
+.gstop.done { fill: var(--ink); }
+.wagon { transition: transform 1s var(--ease); }
+.panel { position: absolute; left: 0; right: 0; top: 232px; display: grid; grid-template-columns: 470px 1fr; column-gap: 40px;
+  opacity: 0; transform: translateY(16px); transition: opacity 0.35s var(--ease), transform 0.5s var(--ease); pointer-events: none; }
+.panel.on { opacity: 1; transform: none; transition-delay: 0.35s; }
+.panel h3 { font-size: 38px; line-height: 1.05; font-weight: 800; letter-spacing: -0.01em; margin: 14px 0 12px; }
 .state { fill: #fff; stroke: var(--ink); stroke-width: 5; transition: fill 0.3s var(--ease); }
 .state.act { fill: var(--line); }
 
@@ -146,6 +161,7 @@ svg { overflow: visible; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rv, .draw, .tok, .carrier, .rail .band, .rail .train, .t-term, .t-nont, .state, .st { transition: none; }
+  .rv, .draw, .tok, .carrier, .rail .band, .rail .train, .t-term, .t-nont, .state, .st,
+  .node, .fade, .gstop, .wagon, .panel { transition: none; }
   .scene { animation: none; }
 }
