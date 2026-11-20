@@ -5,6 +5,8 @@ import type { CSSProperties, ReactNode } from 'react'
 export type SceneDef = {
   id: string
   part: 'p4' | 'extra'
+  /** Backend que muestra la línea: 'c' = primer enfoque (C y GCC), 'native' = el backend propio. */
+  route?: 'c' | 'native' | ((step: number) => 'c' | 'native')
   /** Estación de la línea donde está el tren; puede depender del paso. */
   station: number | ((step: number) => number)
   steps: number
@@ -22,15 +24,21 @@ const STOPS = [
   { x: 380, name: 'Léxico', art: 'tokens', color: 'var(--lex)' },
   { x: 680, name: 'Sintáctico', art: 'AST', color: 'var(--syn)' },
   { x: 980, name: 'Semántico', art: 'AST anotado', color: 'var(--sem)' },
-  { x: 1250, name: 'Generación', art: 'programa.c', color: 'var(--gen)' },
-  { x: 1504, name: 'GCC', art: 'ejecutable', color: 'var(--gen)' },
+  { x: 1250, name: 'Generación', art: 'instrucciones', color: 'var(--gen)' },
+  { x: 1504, name: 'Ensamblado', art: 'ELF', color: 'var(--gen)' },
 ]
 export const LINE_COLORS = STOPS.map((s) => s.color)
 
-type RailProps = { station: number; part: 'p4' | 'extra'; index: number; total: number; onJump: (station: number) => void }
+/** En el primer enfoque las dos últimas estaciones eran otras: se escribía C y GCC hacía el resto. */
+const C_ROUTE: Record<number, { name: string; art: string }> = {
+  4: { name: 'Generación', art: 'programa.c' },
+  5: { name: 'GCC', art: 'ejecutable' },
+}
+
+type RailProps = { station: number; part: 'p4' | 'extra'; route: 'c' | 'native'; index: number; total: number; onJump: (station: number) => void }
 
 /** La línea con sus estaciones. Va a la misma altura en todas las escenas. */
-function Rail({ station, part, index, total, onJump }: RailProps) {
+function Rail({ station, part, route, index, total, onJump }: RailProps) {
   const y = 96
   // La banda dice qué parte se está explicando; el compilador cubre toda la línea
   const band = part === 'p4'
@@ -48,13 +56,15 @@ function Rail({ station, part, index, total, onJump }: RailProps) {
         <path key={s.x} className="seg" d={`M${STOPS[i].x} ${y} H${s.x}`} stroke={s.color} />
       ))}
 
-      {STOPS.map((s, i) => (
+      {STOPS.map((stop, i) => {
+        const s = route === 'c' && C_ROUTE[i] ? { ...stop, ...C_ROUTE[i] } : stop
+        return (
         <g key={s.x}>
           <circle className={`stop${i < station ? ' done' : ''}`} cx={s.x} cy={y} r={15} />
-          <text className="name" x={s.x} y={y + 50} textAnchor={i === 0 ? 'start' : i === 5 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 5 ? 20 : 0}>
+          <text key={s.name} className="name swap" x={s.x} y={y + 50} textAnchor={i === 0 ? 'start' : i === 5 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 5 ? 20 : 0}>
             {s.name}
           </text>
-          <text className="art" x={s.x} y={y + (s.name ? 78 : 50)} textAnchor={i === 0 ? 'start' : i === 5 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 5 ? 20 : 0}>
+          <text key={s.art} className="art swap" x={s.x} y={y + (s.name ? 78 : 50)} textAnchor={i === 0 ? 'start' : i === 5 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 5 ? 20 : 0}>
             {i === 2 && part === 'p4' ? 'válido o errores' : s.art}
           </text>
           <rect
@@ -64,7 +74,8 @@ function Rail({ station, part, index, total, onJump }: RailProps) {
             <title>Ir a {s.name || 'el inicio'}</title>
           </rect>
         </g>
-      ))}
+        )
+      })}
 
       {/* El tren: marca dónde va la explicación */}
       <g className="train" style={{ transform: `translateX(${STOPS[station].x}px)` }}>
@@ -134,6 +145,7 @@ export function Deck({ scenes }: { scenes: SceneDef[] }) {
   }, [index, step])
 
   const station = typeof scene.station === 'function' ? scene.station(step) : scene.station
+  const route = typeof scene.route === 'function' ? scene.route(step) : scene.route ?? 'native'
   const jump = (target: number) => {
     const found = scenes.findIndex((s) => (typeof s.station === 'function' ? s.station(0) : s.station) === target)
     if (found >= 0) setPos([found, 0])
@@ -148,7 +160,7 @@ export function Deck({ scenes }: { scenes: SceneDef[] }) {
       <div key={scene.id} className="scene">
         {scene.render(step)}
       </div>
-      <Rail station={station} part={scene.part} index={index} total={scenes.length} onJump={jump} />
+      <Rail station={station} part={scene.part} route={route} index={index} total={scenes.length} onJump={jump} />
     </main>
   )
 }

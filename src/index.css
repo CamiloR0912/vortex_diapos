@@ -146,6 +146,9 @@ svg { overflow: visible; }
 .rail .count { font: 600 20px var(--mono); fill: var(--ink); }
 .rail .train { transition: transform 0.9s var(--ease); }
 .rail .hit { fill: transparent; cursor: pointer; }
+/* Cuando cambia el enfoque, el nombre de la estación se reescribe en su lugar */
+.rail .swap { animation: swap-in 0.7s var(--ease) both; }
+@keyframes swap-in { from { opacity: 0; } }
 .rail .hit:focus-visible { outline: 4px solid var(--ink); }
 
 /* ---- Tablas de correspondencia ---- */
@@ -163,5 +166,5 @@ svg { overflow: visible; }
 @media (prefers-reduced-motion: reduce) {
   .rv, .draw, .tok, .carrier, .rail .band, .rail .train, .t-term, .t-nont, .state, .st,
   .node, .fade, .gstop, .wagon, .panel { transition: none; }
-  .scene { animation: none; }
+  .scene, .rail .swap { animation: none; }
 }

@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { rv } from '../deck'
 import type { SceneDef } from '../deck'
 import { Arrow, Check, Cross, NonT, Term, TreeNode } from '../ui'
+import { Change, NativeResults, StageArrays, StageBytes, StageElf, StageExceptions, StageFlow, StageFunctions, StageReals, StageStack } from './native'
 
 const abs = (left: number, top: number, width?: number): CSSProperties => ({ position: 'absolute', left, top, width })
 
@@ -28,7 +29,7 @@ function Compiler({ step }: { step: number }) {
           <p className="lead" style={{ fontSize: 30 }}><span className="b">Compilador (punto extra):</span> traduce el programa a otro que la máquina puede correr.</p>
         </div>
         <div className={rv(step, 2, 'plate out')} style={{ ...abs(0, 316, 1456), fontSize: 24, lineHeight: '36px', padding: '16px 24px' }}>
-          {'$ ./vortexc ejemplos/demo.vx\nCompiled ejemplos/demo.vx -> ejemplos/demo (C code: ejemplos/demo.c)\n$ ./ejemplos/demo\nfact(5) = 120 | sum = 12'}
+          {'$ ./vortexc demo.vx\nCompiled demo.vx -> demo\n$ ./demo\nfact(5) = 120 | sum = 12'}
         </div>
       </div>
     </>
@@ -41,8 +42,8 @@ const STAGES = [
   { x: 0, w: 226, name: 'Léxico', file: 'lexer.l', color: 'var(--lex)', at: 1 },
   { x: 246, w: 226, name: 'Sintáctico', file: 'parser.y', color: 'var(--syn)', at: 1 },
   { x: 492, w: 226, name: 'Semántico', file: 'semantic.c', color: 'var(--sem)', at: 1 },
-  { x: 1010, w: 226, name: 'Generación', file: 'codegen.c', color: 'var(--gen)', at: 3 },
-  { x: 1256, w: 200, name: 'GCC', file: 'vx_runtime.h', color: 'var(--gen)', at: 3 },
+  { x: 1010, w: 216, name: 'Generación', file: 'x86gen.c', color: 'var(--gen)', at: 3 },
+  { x: 1246, w: 210, name: 'Ejecutable', file: 'elf.c', color: 'var(--gen)', at: 3 },
 ]
 
 function FrontBack({ step }: { step: number }) {
@@ -76,11 +77,11 @@ function FrontBack({ step }: { step: number }) {
             <path className="guide" d="M1010 62 V44 H1456 V62" />
             <text className="sl" x={1010} y={28}>BACKEND</text>
             <text className="sl sm" x={1010} y={276}>Produce el ejecutable.</text>
-            <text className="sl sm" x={1010} y={308}>Nunca mira el texto fuente.</text>
+            <text className="sl sm" x={1010} y={308}>Lo construimos dos veces.</text>
           </g>
         </svg>
         <div className={rv(step, 4)} style={abs(0, 366, 1456)}>
-          <div className="plate out" style={{ fontSize: 24 }}>main.c:  yyparse()  →  semantic_check()  →  generate_c()  →  gcc</div>
+          <div className="plate out" style={{ fontSize: 24 }}>main.c:  yyparse()  →  semantic_check()  →  generate_native()</div>
           <p className="note" style={{ marginTop: 16, fontSize: 26 }}>
             <span className="mono">vortex.h</span> define Node, Type y Symbol: las estructuras que comparten todas las etapas.
           </p>
@@ -401,7 +402,7 @@ function Codegen({ step }: { step: number }) {
   const walking = step <= 4
   return (
     <>
-      <h2>Generación: recorrer el árbol y escribir C</h2>
+      <h2>Primer enfoque: recorrer el árbol y escribir C</h2>
       <div className="body">
         {/* Izquierda: el árbol anotado que se recorre; al final, el patrón general */}
         <div className={step < 6 ? 'rv on' : 'rv'} style={abs(0, 0)}>
@@ -454,71 +455,6 @@ function Codegen({ step }: { step: number }) {
               <div key={i} className={i === 4 || i === 5 ? 'hl' : undefined}>{l || ' '}</div>
             ))}
           </div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ------------------------------------------------------ GCC: el driver */
-
-const FLAGS = [
-  ['-O0', 'Sin optimizar: los valores locales sobreviven cuando longjmp vuelve a un catch.'],
-  ['-w', 'Sin advertencias: el código generado no es para leerlo a mano.'],
-  ['-I…', 'Carpeta de vortexc: ahí busca vx_runtime.h.'],
-  ['-o demo', 'Nombre del ejecutable: demo.vx produce demo.'],
-] as const
-
-const TOOLS = [
-  { name: 'Preprocesador', prog: 'cc1 -E', out: 'C expandido' },
-  { name: 'Compilador', prog: 'cc1', out: 'ensamblador .s' },
-  { name: 'Ensamblador', prog: 'as', out: 'objeto .o' },
-  { name: 'Enlazador', prog: 'ld', out: 'ejecutable' },
-]
-
-function Gcc({ step }: { step: number }) {
-  return (
-    <>
-      <h2>GCC compila el C que escribe vortexc</h2>
-      <div className="body">
-        <div className="plate out" style={{ ...abs(0, 0, 1456), fontSize: 30, padding: '12px 24px' }}>
-          {'$ gcc -O0 -w -I… -o demo demo.c'}
-        </div>
-        <div className={rv(step, 1)} style={{ ...abs(0, 92, 1456), display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', columnGap: 32 }}>
-          {FLAGS.map(([f, t]) => (
-            <div key={f}>
-              <span className="tag">{f}</span>
-              <p className="note" style={{ fontSize: 24, marginTop: 10, color: 'var(--ink)' }}>{t}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className={rv(step, 2)} style={abs(0, 246, 1456)}>
-          <p style={{ font: '800 28px var(--sans)', marginBottom: 14 }}>
-            gcc es un driver: no traduce nada él mismo, ejecuta cuatro programas en orden.
-          </p>
-          <svg width="1456" height="130" viewBox="0 0 1456 130">
-            {TOOLS.map((t, i) => {
-              const x = i * 374
-              return (
-                <g key={t.name}>
-                  {i > 0 && <path className="gtrack" stroke="var(--gen)" d={`M${x - 52} 64 H${x - 10}`} />}
-                  <rect className="node" x={x} y={4} width={330} height={120} />
-                  <text className="sl" x={x + 20} y={46}>{t.name}</text>
-                  <rect x={x + 20} y={62} width={t.prog.length * 15 + 20} height={34} fill="var(--ink)" />
-                  <text className="st sm inv" x={x + 30} y={87}>{t.prog}</text>
-                  <text className="sl sm soft" x={x + 314} y={112} textAnchor="end">→ {t.out}</text>
-                </g>
-              )
-            })}
-          </svg>
-        </div>
-
-        <div className={rv(step, 3)} style={{ ...abs(0, 444, 1456), display: 'grid', gridTemplateColumns: '1fr auto', columnGap: 32, alignItems: 'center' }}>
-          <p className="lead" style={{ fontSize: 26 }}>
-            main.c lo lanza con fork + execvp y espera con waitpid. Si falla, es un error interno:
-          </p>
-          <div className="plate out" style={{ fontSize: 22, padding: '10px 18px' }}>Internal error: gcc could not compile demo.c</div>
         </div>
       </div>
     </>
@@ -613,7 +549,7 @@ function Flow({ step }: { step: number }) {
   const at = Math.min(step, 4)
   return (
     <>
-      <h2>De demo.c a ejecutable, etapa por etapa</h2>
+      <h2>Primer enfoque: GCC hacía todo lo demás</h2>
       <div className="body">
         <svg width="1456" height="220" viewBox="0 0 1456 220" style={{ position: 'absolute', left: 0, top: 0 }}>
           {/* La vía completa en guía fina; el tramo recorrido se pinta */}
@@ -661,115 +597,6 @@ function Flow({ step }: { step: number }) {
   )
 }
 
-/* ----------------------------------------- B8: errores en ejecución */
-
-function Runtime({ step }: { step: number }) {
-  return (
-    <>
-      <h2>En ejecución: vx_runtime.h acompaña al programa</h2>
-      <div className="body">
-        <div className="plate" style={{ ...abs(0, 0, 540), fontSize: 24, lineHeight: '40px' }}>
-          {['vector<int> v = [1, 2, 3];', 'try {', '    print(v[3]);', '} catch (e) {', '    print("caught:", e);', '}'].map((l, i) => (
-            <div key={i} className={(i === 1 && step === 1) || (i === 2 && step === 2) || (i === 4 && step === 3) ? 'hl' : undefined}>{l}</div>
-          ))}
-        </div>
-        <div className={rv(step, 1)} style={{ ...abs(590, 4, 866), display: 'flex', alignItems: 'center', gap: 8, fontSize: 20 }}>
-          <span className="chip">try</span>
-          <svg width="50" height="30"><path className="guide" d="M4 15 H38" /><Arrow x={42} y={15} /></svg>
-          <span className="chip t">registra un manejador (setjmp)</span>
-        </div>
-        <div className={rv(step, 2)} style={{ ...abs(590, 78, 866), display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="chip">v[3]</span>
-          <svg width="50" height="30"><path className="guide" d="M4 15 H38" /><Arrow x={42} y={15} /></svg>
-          <span className="chip t">vx_get revisa el índice</span>
-          <svg width="50" height="30"><path className="guide" d="M4 15 H38" /><Arrow x={42} y={15} /></svg>
-          <span className="chip t">longjmp al catch</span>
-        </div>
-        <div className={rv(step, 3, 'plate out')} style={{ ...abs(590, 156, 866), fontSize: 24, lineHeight: '36px' }}>
-          {'caught: index 3 out of range\nfor vector<int> of length 3 (line 3)'}
-        </div>
-        <div className={rv(step, 4)} style={abs(0, 330, 1456)}>
-          <div className="rule" style={{ marginBottom: 22 }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '560px 1fr', columnGap: 60, alignItems: 'center' }}>
-            <p className="lead" style={{ fontSize: 28 }}>Sin un try activo, el programa termina con la clase de error y la línea.</p>
-            <div className="plate out" style={{ fontSize: 24 }}>{'[Runtime error] line 5: division by zero'}</div>
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ----------------------------------------- B9: el recorrido completo */
-
-const JOURNEY = [
-  { x: 24, left: 0, w: 400, up: true, text: 'print("fact(5) =",\n      fact(5));' },
-  { x: 308, left: 150, w: 430, up: false, text: 'PRINT ( STRING_LIT ,\nIDENTIFIER ( INT_LIT ) ) ;' },
-  { x: 608, left: 440, w: 360, up: true, text: 'PRINT\n  STRING "fact(5) ="\n  CALL fact\n    INT 5' },
-  { x: 908, left: 670, w: 420, up: false, text: 'CALL fact : int\n  símbolo: f_fact_1\n  INT 5 : int' },
-  { x: 1178, left: 830, w: 626, up: true, text: 'long long vx_p_2 =\n  (vx_enter("fact", 9), f_fact_1(5LL));' },
-  { x: 1432, left: 1226, w: 230, up: false, text: '$ ./demo\nfact(5) = 120', out: true },
-]
-
-function Journey({ step }: { step: number }) {
-  return (
-    <>
-      <h2>El recorrido completo de una línea de demo.vx</h2>
-      <div className="body">
-        <svg width="1456" height="510" viewBox="0 0 1456 510" style={{ position: 'absolute', left: 0, top: 0 }}>
-          {JOURNEY.map((j, i) => (
-            <path key={i} className={rv(step, i, 'guide draw')} pathLength={1} d={`M${j.x} ${j.up ? 164 : 344} V504`} />
-          ))}
-        </svg>
-        {JOURNEY.map((j, i) => (
-          <div
-            key={i} className={rv(step, i, j.out ? 'plate out' : 'plate')}
-            style={{ ...abs(j.left, j.up ? 0 : 214, j.w), fontSize: 24, lineHeight: '34px', padding: '12px 16px', height: j.up ? 164 : 130 }}
-          >
-            {j.text}
-          </div>
-        ))}
-        <div className={rv(step, 6)} style={{ ...abs(0, 420, 1140), display: 'grid', gridTemplateColumns: '1fr auto', columnGap: 24, alignItems: 'center', background: 'var(--ground)', padding: '16px 0 14px' }}>
-          <p className="lead" style={{ fontSize: 27 }}>Si el frontend encuentra errores, el recorrido termina ahí:</p>
-          <div className="plate out" style={{ fontSize: 24, padding: '12px 16px' }}>3 error(s) found; program not compiled.</div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ------------------------------------ B10: cada error en su etapa */
-
-const BY_STAGE = [
-  ['Léxico', 'var(--lex)', "[Lexical error] line 7: invalid character '@'"],
-  ['Sintáctico', 'var(--syn)', "[Invalid construct] line 4: variable 'y' must be initialized"],
-  ['Semántico', 'var(--sem)', '[Semantic error] line 4: type mismatch: cannot assign float to int'],
-  ['Ejecución', 'var(--gen)', '[Runtime error] line 5: division by zero'],
-]
-
-function Results({ step }: { step: number }) {
-  return (
-    <>
-      <h2>Cada error se detecta en su etapa</h2>
-      <div className="body">
-        {BY_STAGE.map(([name, color, msg]) => (
-          <div key={name} style={{ display: 'grid', gridTemplateColumns: '60px 250px 1fr', alignItems: 'center', marginBottom: 16 }}>
-            <svg width="44" height="44" viewBox="0 0 44 44"><circle cx={22} cy={22} r={14} fill={color} stroke="var(--ink)" strokeWidth={5} /></svg>
-            <span className="lead" style={{ fontSize: 30 }}>{name}</span>
-            <div className="plate out" style={{ fontSize: 24, padding: '12px 18px' }}>{msg}</div>
-          </div>
-        ))}
-        <p className={rv(step, 1, 'lead')} style={{ marginTop: 26, fontSize: 30 }}>
-          Pruebas: 30&nbsp;de&nbsp;30 en el analizador del punto&nbsp;4 y 33&nbsp;de&nbsp;33 en el compilador, cada una con su salida esperada.
-        </p>
-        <p className={rv(step, 2, 'note')} style={{ marginTop: 16, fontSize: 26 }}>
-          Decisiones: el destino es C y GCC produce el código máquina; las funciones anidadas dependen de GCC; la memoria de cadenas y arreglos no se libera.
-        </p>
-      </div>
-    </>
-  )
-}
-
 /* ---------------------------------------------------- Cierre */
 
 function Closing() {
@@ -791,11 +618,19 @@ export const PART_B: SceneDef[] = [
   { id: 'ambitos', part: 'extra', station: 3, steps: 3, render: (s) => <Scopes step={s} /> },
   { id: 'tipos', part: 'extra', station: 3, steps: 4, render: (s) => <Types step={s} /> },
   { id: 'sobrecarga', part: 'extra', station: 3, steps: 3, render: (s) => <Overload step={s} /> },
-  { id: 'generacion', part: 'extra', station: 4, steps: 6, render: (s) => <Codegen step={s} /> },
-  { id: 'gcc', part: 'extra', station: 5, steps: 3, render: (s) => <Gcc step={s} /> },
-  { id: 'flujo-gcc', part: 'extra', station: 5, steps: 5, render: (s) => <Flow step={s} /> },
-  { id: 'ejecucion', part: 'extra', station: 5, steps: 4, render: (s) => <Runtime step={s} /> },
-  { id: 'recorrido', part: 'extra', station: (s) => Math.min(s, 5), steps: 6, render: (s) => <Journey step={s} /> },
-  { id: 'resultados', part: 'extra', station: 5, steps: 2, render: (s) => <Results step={s} /> },
+  /* Primer enfoque: traducir a C y dejar el resto a GCC */
+  { id: 'enfoque-c', part: 'extra', route: 'c', station: 4, steps: 6, render: (s) => <Codegen step={s} /> },
+  { id: 'enfoque-gcc', part: 'extra', route: 'c', station: 5, steps: 5, render: (s) => <Flow step={s} /> },
+  /* El cambio y las siete etapas del backend propio */
+  { id: 'cambio', part: 'extra', route: (s) => (s >= 2 ? 'native' : 'c'), station: 4, steps: 3, render: (s) => <Change step={s} /> },
+  { id: 'etapa-1-bytes', part: 'extra', station: 5, steps: 3, render: (s) => <StageBytes step={s} /> },
+  { id: 'etapa-1-elf', part: 'extra', station: 5, steps: 2, render: (s) => <StageElf step={s} /> },
+  { id: 'etapa-2-pila', part: 'extra', station: 4, steps: 6, render: (s) => <StageStack step={s} /> },
+  { id: 'etapa-3-saltos', part: 'extra', station: 4, steps: 5, render: (s) => <StageFlow step={s} /> },
+  { id: 'etapa-4-funciones', part: 'extra', station: 4, steps: 5, render: (s) => <StageFunctions step={s} /> },
+  { id: 'etapa-5-reales', part: 'extra', station: 4, steps: 4, render: (s) => <StageReals step={s} /> },
+  { id: 'etapa-6-excepciones', part: 'extra', station: 4, steps: 4, render: (s) => <StageExceptions step={s} /> },
+  { id: 'etapa-7-arreglos', part: 'extra', station: 4, steps: 4, render: (s) => <StageArrays step={s} /> },
+  { id: 'resultados', part: 'extra', station: 5, steps: 3, render: (s) => <NativeResults step={s} /> },
   { id: 'cierre', part: 'extra', station: 5, steps: 0, render: () => <Closing /> },
 ]
