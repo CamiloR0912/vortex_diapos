@@ -317,9 +317,6 @@ function Handshake({ step }: { step: number }) {
             ))}
           </g>
         </svg>
-        <div className={rv(step, 3, 'plate out')} style={{ position: 'absolute', left: 0, right: 0, top: 360, textAlign: 'center' }}>
-          parser.y:  145 producciones  ·  279 estados LALR(1)  ·  0 conflictos
-        </div>
       </div>
     </>
   )
@@ -400,7 +397,15 @@ const LEVELS = [
   ['add_expr', '+  -'], ['mul_expr', '*  /  %'], ['unary', '-  !'], ['postfix', '[ ]'], ['primary', 'literales  ( )'],
 ]
 
+/** Los tres niveles más bajos, en palabras sencillas. */
+const BASIC_LEVELS = [
+  { name: 'unary', what: 'Un operador delante de un solo valor.', ex: '-x    !listo' },
+  { name: 'postfix', what: 'Algo que va después de un valor: el índice entre corchetes.', ex: 'v[2]    m[1][0]' },
+  { name: 'primary', what: 'La pieza más básica: un número, un texto, una variable, una llamada a función o algo entre paréntesis.', ex: '7    "hola"    x    f(3)    (a + b)' },
+]
+
 function Precedence({ step }: { step: number }) {
+  const basics = step >= 4
   return (
     <>
       <h2>La precedencia vive en la gramática</h2>
@@ -409,7 +414,7 @@ function Precedence({ step }: { step: number }) {
           <path className="track" d="M30 22 V478" />
           {LEVELS.map(([name, ops], i) => {
             const y = 24 + i * 56
-            const hot = step >= 2 && (i === 4 || i === 5)
+            const hot = (step >= 2 && step < 4 && (i === 4 || i === 5)) || (basics && i >= 6)
             return (
               <g key={name}>
                 <circle cx={30} cy={y} r={13} fill={hot ? 'var(--ink)' : 'var(--ground)'} stroke="var(--ink)" strokeWidth={5} />
@@ -421,7 +426,7 @@ function Precedence({ step }: { step: number }) {
           <text className="sl sm" x={640} y={34} textAnchor="end">liga menos</text>
           <text className="sl sm" x={640} y={482} textAnchor="end">liga más</text>
 
-          <g className={rv(step, 1)}>
+          <g className={step >= 1 && !basics ? 'rv on' : 'rv'}>
             <text className="st big" x={1090} y={34} textAnchor="middle">x + 2 * 3</text>
             <path className="guide draw" pathLength={1} d="M1090 118 L930 212 M1090 118 L1250 212 M1250 240 L1150 332 M1250 240 L1350 332" />
             <TreeNode x={1090} y={100} w={90} label="+" fill />
@@ -431,12 +436,96 @@ function Precedence({ step }: { step: number }) {
             <TreeNode x={1350} y={350} w={90} label="3" />
           </g>
         </svg>
-        <p className={rv(step, 2, 'lead')} style={{ position: 'absolute', left: 700, top: 402, width: 756, fontSize: 28 }}>
+        <p className={step >= 2 && !basics ? 'rv on lead' : 'rv lead'} style={{ position: 'absolute', left: 700, top: 402, width: 756, fontSize: 28 }}>
           Un no terminal por nivel: el * queda más abajo en el árbol y se calcula primero.
         </p>
-        <p className={rv(step, 3, 'note')} style={{ position: 'absolute', left: 700, top: 478, width: 756, fontSize: 24 }}>
+        <p className={step >= 3 && !basics ? 'rv on note' : 'rv note'} style={{ position: 'absolute', left: 700, top: 478, width: 756, fontSize: 24 }}>
           Recursión por la izquierda: <span className="mono">a - b - c</span> es <span className="mono">(a - b) - c</span>.
         </p>
+
+        {/* Paso 4: qué son los tres niveles de abajo */}
+        <div className={rv(step, 4)} style={{ position: 'absolute', left: 700, top: 0, width: 756 }}>
+          <p className="lead" style={{ fontSize: 28, marginBottom: 18 }}>Los tres niveles de abajo son las piezas más pequeñas de una expresión:</p>
+          {BASIC_LEVELS.map((b) => (
+            <div key={b.name} style={{ borderTop: '4px solid var(--ink)', padding: '12px 0 14px' }}>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
+                <span className="tag">{b.name}</span>
+                <span className="lead" style={{ fontSize: 25 }}>{b.what}</span>
+              </div>
+              <p className="mono" style={{ fontSize: 24, marginTop: 8, marginLeft: 4, color: 'var(--syn)', fontWeight: 600, whiteSpace: 'pre' }}>{b.ex}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ------------------------------- A9a: qué es desplazar y qué es reducir */
+
+type Act = 'd' | 'r' | null
+const SR: { stack: string[]; read: number; act: Act; text: string }[] = [
+  { stack: [], read: 0, act: null, text: 'La pila empieza vacía.' },
+  { stack: ['x'], read: 1, act: 'd', text: 'Desplazar: entra x.' },
+  { stack: ['expr'], read: 1, act: 'r', text: 'Reducir: x sola ya es una expresión.' },
+  { stack: ['expr', '+'], read: 2, act: 'd', text: 'Desplazar: entra el +. Falta lo de la derecha.' },
+  { stack: ['expr', '+', '2'], read: 3, act: 'd', text: 'Desplazar: entra el 2.' },
+  { stack: ['expr', '+', 'expr'], read: 3, act: 'r', text: 'Reducir: el 2 también es una expresión.' },
+  { stack: ['expr'], read: 3, act: 'r', text: 'Reducir: «expr + expr» es la regla de la suma. Listo.' },
+]
+const SR_INPUT = ['x', '+', '2']
+
+function ShiftReduce({ step }: { step: number }) {
+  const s = SR[Math.min(step, SR.length - 1)]
+  const card = (act: 'd' | 'r', title: string, text: string) => (
+    <div style={{
+      border: '4px solid var(--ink)', padding: '16px 22px', marginBottom: 18,
+      background: s.act === act ? 'color-mix(in srgb, var(--syn) 22%, #fff)' : '#fff', transition: 'background 0.4s',
+    }}>
+      <p style={{ font: '800 30px var(--sans)', marginBottom: 6 }}>{title}</p>
+      <p className="lead" style={{ fontSize: 25 }}>{text}</p>
+    </div>
+  )
+  return (
+    <>
+      <h2>¿Qué hace el parser? Desplazar y reducir</h2>
+      <div className="body">
+        <div style={{ position: 'absolute', left: 0, top: 0, width: 640 }}>
+          <p className="lead" style={{ fontSize: 26, marginBottom: 18 }}>
+            Bison lee los tokens de izquierda a derecha y los va guardando en una pila. En cada paso hace una de dos cosas:
+          </p>
+          {card('d', 'Desplazar', 'Tomar el siguiente token y ponerlo en la pila. Se hace cuando la frase todavía no está completa.')}
+          {card('r', 'Reducir', 'Cuando lo de arriba de la pila completa una regla, se cambia por el nombre de esa regla.')}
+        </div>
+
+        <div style={{ position: 'absolute', left: 720, top: 0, width: 736 }}>
+          <p style={{ font: '800 26px var(--sans)', marginBottom: 10 }}>Ejemplo: x + 2</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 66 }}>
+            <span className="note" style={{ fontSize: 24, width: 150 }}>por leer</span>
+            {SR_INPUT.map((t, i) => (
+              <span key={i} className="chip" style={{ fontSize: 28, opacity: i < s.read ? 0.15 : 1, transition: 'opacity 0.4s' }}>{t}</span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 86, marginTop: 14, borderBottom: '4px solid var(--ink)' }}>
+            <span className="note" style={{ fontSize: 24, width: 150 }}>pila</span>
+            {s.stack.map((t, i) =>
+              t === 'expr'
+                ? <span key={i + t} className="tag" style={{ fontSize: 28, padding: '12px 18px 10px' }}>{t}</span>
+                : <span key={i + t} className="chip" style={{ fontSize: 28 }}>{t}</span>,
+            )}
+          </div>
+          <p className="lead" style={{ fontSize: 30, marginTop: 24, minHeight: 80 }}>
+            {step > 0 && <span className="note mono" style={{ fontSize: 24, marginRight: 12 }}>paso {step}</span>}
+            {s.text}
+          </p>
+          <p className={rv(step, 6, 'note')} style={{ fontSize: 25, marginTop: 10 }}>
+            Cada vez que reduce, el parser ejecuta el código de esa regla: así se arma el árbol.
+          </p>
+        </div>
+        <div style={{ position: 'absolute', left: 720, top: 430, display: 'flex', gap: 22, alignItems: 'center' }}>
+          <span className="chip" style={{ fontSize: 22 }}>x</span><span className="note" style={{ fontSize: 22 }}>token</span>
+          <span className="tag" style={{ marginLeft: 18 }}>expr</span><span className="note" style={{ fontSize: 22 }}>regla ya reconocida</span>
+        </div>
       </div>
     </>
   )
@@ -448,8 +537,15 @@ function Conflict({ step }: { step: number }) {
   const solved = step >= 2
   return (
     <>
-      <h2>Un conflicto desplazar/reducir, y cómo se resolvió</h2>
+      <h2>Cuando las dos acciones sirven: el if y el else</h2>
       <div className="body">
+        <p className={step === 0 ? 'rv on lead' : 'rv lead'} style={{ position: 'absolute', left: 0, top: 0, width: 720, fontSize: 27 }}>
+          Bison ya tiene en la pila <span className="mono">if</span>, la condición y el bloque. El siguiente token es <span className="mono">else</span>.
+          ¿Desplaza o reduce?
+        </p>
+        <p className={step === 1 ? 'rv on lead' : 'rv lead'} style={{ position: 'absolute', left: 0, top: 0, width: 720, fontSize: 27 }}>
+          Las dos son válidas según la gramática. Eso es un conflicto: Bison no sabe cuál elegir.
+        </p>
         <svg width="1456" height="340" viewBox="0 0 1456 340">
           <path className="track" d="M40 190 H760" />
           <circle cx={40} cy={190} r={11} fill="var(--ink)" />
@@ -462,22 +558,25 @@ function Conflict({ step }: { step: number }) {
           <g className={rv(step, 1)}>
             <path className="track draw" pathLength={1} d="M760 190 q30 0 30 -30 v-50 q0 -30 30 -30 H960" />
             <circle cx={960} cy={80} r={11} fill="var(--ground)" stroke="var(--ink)" strokeWidth={6} />
-            <text className="sl" x={990} y={72}>Desplazar</text>
-            <text className="sl sm" x={990} y={104}>el else pertenece a este if</text>
+            <text className="sl" x={990} y={72}>Desplazar: tomar el else</text>
+            <text className="sl sm" x={990} y={104}>el else es de este if</text>
             {solved && <Check x={1420} y={80} s={1.4} />}
 
             <path className="track ink draw" pathLength={1} style={{ opacity: solved ? 0.3 : 1 }} d="M760 190 q30 0 30 30 v50 q0 30 30 30 H960" />
             <circle cx={960} cy={300} r={11} fill="var(--ground)" stroke="var(--ink)" strokeWidth={6} />
-            <text className={`sl${solved ? ' soft' : ''}`} x={990} y={292}>Reducir</text>
-            <text className={`sl sm${solved ? ' soft' : ''}`} x={990} y={324}>el if termina y el else queda huérfano</text>
+            <text className={`sl${solved ? ' soft' : ''}`} x={990} y={292}>Reducir: cerrar el if ya</text>
+            <text className={`sl sm${solved ? ' soft' : ''}`} x={990} y={324}>el else queda sin dueño</text>
             {solved && <Cross x={1420} y={300} s={1.3} />}
           </g>
         </svg>
+        <p className={rv(step, 2, 'lead')} style={{ position: 'absolute', left: 0, top: 0, width: 720, fontSize: 27, opacity: step >= 2 ? 1 : 0 }}>
+          Solución: le dimos al <span className="mono">else</span> más prioridad que al if sin else. Bison siempre desplaza: cada else va con el if más cercano.
+        </p>
         <div className={rv(step, 2, 'plate small')} style={{ position: 'absolute', left: 0, top: 346, width: 700 }}>
-          {'%nonassoc NO_ELSE\n%nonassoc ELSE\nif_stmt: IF condition block  %prec NO_ELSE'}
+          {'%nonassoc NO_ELSE      // menos prioridad\n%nonassoc ELSE         // más prioridad\nif_stmt: IF condition block  %prec NO_ELSE'}
         </div>
         <p className={rv(step, 3, 'lead')} style={{ position: 'absolute', left: 750, top: 352, width: 706, fontSize: 30 }}>
-          El mismo arreglo resuelve try y catch. Bison procesa la gramática sin conflictos.
+          Lo mismo se hizo con try y catch. Resultado: la gramática no tiene conflictos.
         </p>
       </div>
     </>
@@ -554,9 +653,10 @@ export const PART_A: SceneDef[] = [
   { id: 'regex', part: 'p4', station: 1, steps: 5, render: (s) => <Regex step={s} /> },
   { id: 'reservadas', part: 'p4', station: 1, steps: 2, render: (s) => <Reserved step={s} /> },
   { id: 'errores-lexicos', part: 'p4', station: 1, steps: 3, render: (s) => <LexErrors step={s} /> },
-  { id: 'yylex', part: 'p4', station: 2, steps: 3, render: (s) => <Handshake step={s} /> },
+  { id: 'yylex', part: 'p4', station: 2, steps: 2, render: (s) => <Handshake step={s} /> },
   { id: 'vias', part: 'p4', station: 2, steps: 7, render: (s) => <Railroad step={s} /> },
-  { id: 'precedencia', part: 'p4', station: 2, steps: 3, render: (s) => <Precedence step={s} /> },
+  { id: 'precedencia', part: 'p4', station: 2, steps: 4, render: (s) => <Precedence step={s} /> },
+  { id: 'desplazar-reducir', part: 'p4', station: 2, steps: 6, render: (s) => <ShiftReduce step={s} /> },
   { id: 'conflicto', part: 'p4', station: 2, steps: 3, render: (s) => <Conflict step={s} /> },
   { id: 'clases-error', part: 'p4', station: 2, steps: 4, render: (s) => <ErrorKinds step={s} /> },
   { id: 'cierre-p4', part: 'p4', station: 2, steps: 2, render: (s) => <Point4End step={s} /> },

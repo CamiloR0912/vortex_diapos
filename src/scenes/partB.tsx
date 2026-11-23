@@ -2,7 +2,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import { rv } from '../deck'
 import type { SceneDef } from '../deck'
 import { Arrow, Check, Cross, NonT, Term, TreeNode } from '../ui'
-import { Change, NativeResults, StageArrays, StageBytes, StageElf, StageExceptions, StageFlow, StageFunctions, StageReals, StageStack } from './native'
+import { Change, Glossary, NativeResults, StageArrays, StageBytes, StageElf, StageExceptions, StageFlow, StageFunctions, StageReals, StageStack } from './native'
+import { FileAst, FileElf, FileEnc, FileGen, FileMain, FileRuntime, FileRuntimeArrays, FileSemantic, Handoff } from './files'
 
 const abs = (left: number, top: number, width?: number): CSSProperties => ({ position: 'absolute', left, top, width })
 
@@ -315,32 +316,52 @@ function Types({ step }: { step: number }) {
 /* ----------------------------------------------- B6: sobrecarga */
 
 type Cand = [sig: string, cost: string, ok: boolean | null]
-const CASES: { call: string; cands: Cand[]; verdict: ReactNode; good: boolean }[] = [
+const CASES: { call: string; why: string; cands: Cand[]; verdict: ReactNode; good: boolean }[] = [
   {
-    call: 'describe(7)',
-    cands: [['describe(int x)', '0 promociones', true], ['describe(float x)', '1 promoción', null], ['describe(string x)', 'no encaja', false]],
-    verdict: 'Se elige describe(int x)', good: true,
+    call: 'describe(7)', why: '7 es int: la versión de int le sirve tal cual.',
+    cands: [['describe(int x)', 'sirve tal cual', true], ['describe(float x)', 'sirve convirtiendo 7 → 7.0', null], ['describe(string x)', 'no sirve', false]],
+    verdict: 'Gana describe(int x): no necesita convertir nada.', good: true,
   },
   {
-    call: 'mix(1, 1)',
-    cands: [['mix(int a, float b)', '1 promoción', null], ['mix(float a, int b)', '1 promoción', null]],
-    verdict: '[Semantic error] line 5: ambiguous call mix(int, int)', good: false,
+    call: 'mix(1, 1)', why: 'Las dos versiones necesitan convertir un int: empate.',
+    cands: [['mix(int a, float b)', '1 conversión', null], ['mix(float a, int b)', '1 conversión', null]],
+    verdict: 'Error: ambiguous call mix(int, int)', good: false,
   },
   {
-    call: 'describe(true)',
-    cands: [['describe(int x)', 'no encaja', false], ['describe(float x)', 'no encaja', false], ['describe(string x)', 'no encaja', false]],
-    verdict: "[Semantic error] line 5: no version of 'describe' matches the call describe(bool)", good: false,
+    call: 'describe(true)', why: 'Ninguna versión recibe un bool.',
+    cands: [['describe(int x)', 'no sirve', false], ['describe(float x)', 'no sirve', false], ['describe(string x)', 'no sirve', false]],
+    verdict: "Error: no version of 'describe' matches the call describe(bool)", good: false,
   },
 ]
 
 function Overload({ step }: { step: number }) {
   return (
     <>
-      <h2>Sobrecarga: gana la versión con menos promociones</h2>
+      <h2>Sobrecarga: varias funciones con el mismo nombre</h2>
+      {/* Paso 0: qué es la sobrecarga y qué es una conversión */}
+      <div className={step === 0 ? 'body rv on' : 'body rv'}>
+        <div className="plate" style={{ ...abs(0, 0, 700), fontSize: 24, lineHeight: '40px' }}>
+          {'func string describe(int x)    {…}\nfunc string describe(float x)  {…}\nfunc string describe(string x) {…}\n\nprint(describe(7));'}
+        </div>
+        <div style={abs(760, 0, 696)}>
+          <p className="lead" style={{ fontSize: 28 }}>
+            Las tres se llaman <span className="mono">describe</span>. Se diferencian por el tipo de lo que reciben.
+          </p>
+          <p className="lead" style={{ fontSize: 28, marginTop: 22 }}>
+            En cada llamada, semantic.c mira el tipo de los argumentos y elige una.
+          </p>
+          <div style={{ borderTop: '4px solid var(--ink)', marginTop: 28, paddingTop: 16 }}>
+            <p className="lead" style={{ fontSize: 26 }}>
+              <span className="b">Regla:</span> se puede convertir un int en float (7 → 7.0), pero cada conversión cuenta. Gana la versión que necesite menos.
+            </p>
+          </div>
+        </div>
+      </div>
       <div className="body" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: 36 }}>
         {CASES.map((c, i) => (
           <div key={c.call} className={rv(step, i + 1)}>
-            <div className="plate" style={{ marginBottom: 20 }}>{c.call}</div>
+            <div className="plate" style={{ marginBottom: 12 }}>{c.call}</div>
+            <p className="lead" style={{ fontSize: 24, marginBottom: 16, minHeight: 60 }}>{c.why}</p>
             {c.cands.map(([sig, cost, ok]) => (
               <div key={sig} style={{ display: 'grid', gridTemplateColumns: '46px 1fr', alignItems: 'center', marginBottom: 12 }}>
                 <svg width="30" height="30" viewBox="-15 -15 30 30">
@@ -354,7 +375,7 @@ function Overload({ step }: { step: number }) {
                 </div>
               </div>
             ))}
-            <div className={c.good ? 'plate' : 'plate out'} style={{ marginTop: 16, fontSize: 24, whiteSpace: 'normal', lineHeight: 1.3 }}>{c.verdict}</div>
+            <div className={c.good ? 'plate' : 'plate out'} style={{ marginTop: 10, fontSize: 22, whiteSpace: 'normal', lineHeight: 1.3, padding: '12px 18px' }}>{c.verdict}</div>
           </div>
         ))}
       </div>
@@ -470,78 +491,75 @@ const GSTOPS = [
   { x: 1060, file: 'demo.o', meta: '17 256 bytes', wagon: '.o' },
   { x: 1386, file: 'demo', meta: '22 248 bytes', wagon: 'ELF' },
 ]
-const GTOOLS = ['cc1 -E', 'cc1', 'as', 'ld']
+const GTOOLS = ['preprocesador', 'compilador', 'ensamblador', 'enlazador']
 
-const ASM: [string, string][] = [
-  ['if ((v_n_2 <= 1LL))', 'cmpq   $1, -40(%rbp)'],
-  ['', 'jg     .L190'],
-  ['f_fact_1((v_n_2 - 1LL))', 'movq   -40(%rbp), %rax'],
-  ['', 'subq   $1, %rax'],
-  ['', '…'],
-  ['', 'call   f_fact_1.0'],
-]
+/** Una línea del ejemplo con su explicación al lado. */
+const said = (rows: [string, string][]) => rows.map(([code, what], i) => (
+  <div key={i} style={{ display: 'grid', gridTemplateColumns: '400px 1fr' }}>
+    <span>{code}</span>
+    <span style={{ fontFamily: 'var(--sans)', fontWeight: 600, color: 'var(--gen)' }}>{what}</span>
+  </div>
+))
 
 type Panel = { tag: string; title: string; text: string; out?: boolean; body: ReactNode }
 const PANELS: Panel[] = [
   {
-    tag: 'vortexc', title: 'El punto de partida',
-    text: 'La generación dejó demo.c: 48 líneas de C que empiezan incluyendo el runtime.',
+    tag: 'demo.c', title: 'El punto de partida',
+    text: 'Nuestro compilador traducía Vortex a lenguaje C. El resto del camino lo hacía GCC, en cuatro pasos.',
     body: (
       <>
-        <div className="hl">#include "vx_runtime.h"</div>
-        {'\nint main(void) {\n    auto long long f_fact_1(long long);\n    long long f_fact_1(long long v_n_2) {\n        if ((v_n_2 <= 1LL)) {'}
+        <span style={{ color: 'var(--ink-soft)' }}>{'// Vortex:   print(n - 1);\n// C:\n'}</span>
+        {'#include "vx_runtime.h"\nint main(void) {\n    …\n    vx_print_i(v_n_2 - 1LL);'}
       </>
     ),
   },
   {
-    tag: 'cc1 -E', title: 'Preprocesador',
-    text: 'Pega el texto de cada #include y expande las macros: entran vx_runtime.h y 62 cabeceras del sistema.',
+    tag: 'preprocesador', title: '1. Copiar y pegar',
+    text: 'Donde dice #include, pega el contenido de ese archivo. Las 48 líneas se vuelven casi 3000.',
     body: (
       <>
-        {'# 1 "vx_runtime.h" 1\n# 1 "/usr/include/setjmp.h" 1 3 4\n'}
-        <span style={{ color: 'var(--ink-soft)' }}>{'      … 2858 líneas de declaraciones …\n'}</span>
-        {'# 3 "demo.c" 2\n\n'}
-        <span className="hl">int main(void) {'{'}</span>
+        <span className="hl">{'#include "vx_runtime.h"'}</span>
+        {'\n      ↓  se reemplaza por\n'}
+        <span style={{ color: 'var(--ink-soft)' }}>{'  … 2858 líneas de declaraciones\n    (printf, malloc, setjmp …)\n'}</span>
       </>
     ),
   },
   {
-    tag: 'cc1', title: 'Compilador',
-    text: 'Traduce C a ensamblador x86-64: instrucciones de la máquina, todavía como texto. n vive en la pila, en -40(%rbp).',
-    body: ASM.map(([c, a], i) => (
-      <div key={i} style={{ display: 'grid', gridTemplateColumns: '360px 1fr' }}>
-        <span style={{ color: 'var(--ink-soft)' }}>{c}</span>
-        <span className={a.startsWith('call') || a.startsWith('cmpq') ? 'kw' : undefined}>{a}</span>
-      </div>
-    )),
-  },
-  {
-    tag: 'as', title: 'Ensamblador',
-    text: 'Codifica cada instrucción en bytes. Las direcciones que aún no conoce quedan en cero, pendientes.',
+    tag: 'compilador', title: '2. De C a ensamblador',
+    text: 'Traduce cada línea de C a instrucciones del procesador, todavía escritas como texto.',
     out: true,
-    body: (
-      <>
-        {'48 83 7d d8 01       cmpq  $0x1,-0x28(%rbp)\n7f 1d                jg    19bd\n8b 05 '}
-        <span style={{ color: 'var(--gen)' }}>00 00 00 00</span>
-        {'    mov   0x0(%rip),%eax\n\n17 símbolos sin resolver: printf, malloc, longjmp …\ndemo.o: ELF 64-bit LSB relocatable, x86-64'}
-      </>
-    ),
+    body: said([
+      ['v_n_2 - 1LL', 'en C: n − 1'],
+      ['  movq  -40(%rbp), %rax', 'trae n'],
+      ['  subq  $1, %rax', 'réstale 1'],
+      ['  call  vx_print_i', 'imprime'],
+    ]),
   },
   {
-    tag: 'ld', title: 'Enlazador',
-    text: 'Une demo.o con el arranque de C (crt*.o) y lo enlaza con libc. Cada pendiente encuentra su dueño.',
+    tag: 'ensamblador', title: '3. De texto a números',
+    text: 'Cambia cada instrucción por su código en bytes. Lo que vive en otro archivo, como printf, queda como un hueco.',
     out: true,
-    body: (
-      <>
-        {'Scrt1.o crti.o crtbeginS.o '}<span style={{ color: 'var(--gen)' }}>demo.o</span>{' -lgcc -lc\ncrtendS.o crtn.o\n\nprintf   →  printf@GLIBC_2.2.5    (libc.so.6)\nlongjmp  →  longjmp@GLIBC_2.2.5\ndemo: ELF 64-bit LSB pie executable, x86-64'}
-      </>
-    ),
+    body: said([
+      ['subq $1, %rax', '→  48 83 E8 01'],
+      ['call printf', '→  E8 ?? ?? ?? ??'],
+      ['', '¿dónde está printf? aún no se sabe'],
+    ]),
   },
   {
-    tag: './demo', title: 'Ejecución',
-    text: 'El cargador ld-linux trae libc.so.6 y el código de arranque llama a main.',
+    tag: 'enlazador', title: '4. Llenar los huecos',
+    text: 'Junta nuestro código con la biblioteca de C (libc), donde están printf y compañía. Cada hueco recibe su dirección.',
     out: true,
-    body: '$ ./demo\nfact(5) = 120 | sum = 12\ncaught: index 3 out of range for vector<int> of length 3 (line 10)',
+    body: said([
+      ['demo.o  +  libc', '→  demo'],
+      ['printf', '→  lo trae libc'],
+      ['', 'resultado: el ejecutable'],
+    ]),
+  },
+  {
+    tag: './demo', title: 'Ejecutar',
+    text: 'Al correrlo, Linux carga también la biblioteca de C. Sin ella el programa no funciona.',
+    out: true,
+    body: '$ ./demo\nfact(5) = 120 | sum = 12',
   },
 ]
 
@@ -614,15 +632,25 @@ function Closing() {
 export const PART_B: SceneDef[] = [
   { id: 'compilador', part: 'extra', station: 0, steps: 2, render: (s) => <Compiler step={s} /> },
   { id: 'frontend-backend', part: 'extra', station: 0, steps: 4, render: (s) => <FrontBack step={s} /> },
+  /* Qué hace cada archivo del compilador */
+  { id: 'archivo-traspaso', part: 'extra', station: 2, steps: 4, render: (s) => <Handoff step={s} /> },
+  { id: 'archivo-semantic', part: 'extra', station: 3, steps: 5, render: (s) => <FileSemantic step={s} /> },
+  { id: 'archivo-ast', part: 'extra', station: 3, steps: 2, render: (s) => <FileAst step={s} /> },
+  { id: 'archivo-x86gen', part: 'extra', station: 4, steps: 3, render: (s) => <FileGen step={s} /> },
+  { id: 'archivo-x86enc', part: 'extra', station: 5, steps: 2, render: (s) => <FileEnc step={s} /> },
+  { id: 'archivo-elf', part: 'extra', station: 5, steps: 4, render: (s) => <FileElf step={s} /> },
+  { id: 'archivo-main', part: 'extra', station: 0, steps: 5, render: (s) => <FileMain step={s} /> },
+  { id: 'archivo-runtime', part: 'extra', station: 4, steps: 2, render: (s) => <FileRuntime step={s} /> },
+  { id: 'archivo-runtime-arrays', part: 'extra', station: 4, steps: 2, render: (s) => <FileRuntimeArrays step={s} /> },
   { id: 'ast', part: 'extra', station: 2, steps: 3, render: (s) => <Ast step={s} /> },
   { id: 'ambitos', part: 'extra', station: 3, steps: 3, render: (s) => <Scopes step={s} /> },
   { id: 'tipos', part: 'extra', station: 3, steps: 4, render: (s) => <Types step={s} /> },
-  { id: 'sobrecarga', part: 'extra', station: 3, steps: 3, render: (s) => <Overload step={s} /> },
-  /* Primer enfoque: traducir a C y dejar el resto a GCC */
+  { id: 'sobrecarga', part: 'extra', station: 3, steps: 3, render: (s) => <Overload step={s} /> },  /* Primer enfoque: traducir a C y dejar el resto a GCC */
   { id: 'enfoque-c', part: 'extra', route: 'c', station: 4, steps: 6, render: (s) => <Codegen step={s} /> },
   { id: 'enfoque-gcc', part: 'extra', route: 'c', station: 5, steps: 5, render: (s) => <Flow step={s} /> },
   /* El cambio y las siete etapas del backend propio */
   { id: 'cambio', part: 'extra', route: (s) => (s >= 2 ? 'native' : 'c'), station: 4, steps: 3, render: (s) => <Change step={s} /> },
+  { id: 'vocabulario', part: 'extra', station: 4, steps: 3, render: (s) => <Glossary step={s} /> },
   { id: 'etapa-1-bytes', part: 'extra', station: 5, steps: 3, render: (s) => <StageBytes step={s} /> },
   { id: 'etapa-1-elf', part: 'extra', station: 5, steps: 2, render: (s) => <StageElf step={s} /> },
   { id: 'etapa-2-pila', part: 'extra', station: 4, steps: 6, render: (s) => <StageStack step={s} /> },
@@ -631,6 +659,6 @@ export const PART_B: SceneDef[] = [
   { id: 'etapa-5-reales', part: 'extra', station: 4, steps: 4, render: (s) => <StageReals step={s} /> },
   { id: 'etapa-6-excepciones', part: 'extra', station: 4, steps: 4, render: (s) => <StageExceptions step={s} /> },
   { id: 'etapa-7-arreglos', part: 'extra', station: 4, steps: 4, render: (s) => <StageArrays step={s} /> },
-  { id: 'resultados', part: 'extra', station: 5, steps: 3, render: (s) => <NativeResults step={s} /> },
+  { id: 'resultados', part: 'extra', station: 5, steps: 1, render: (s) => <NativeResults step={s} /> },
   { id: 'cierre', part: 'extra', station: 5, steps: 0, render: () => <Closing /> },
 ]
