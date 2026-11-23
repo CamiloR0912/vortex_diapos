@@ -65,7 +65,7 @@ const FEATURES = [
 function Language({ step }: { step: number }) {
   return (
     <>
-      <h2>Vortex, un lenguaje para scripts científicos</h2>
+      <h2>Vortex</h2>
       <div className="body">
         <div className="plate" style={{ position: 'absolute', left: 0, top: 0, width: 800, fontSize: 24, lineHeight: '36px', padding: '14px 24px' }}>
           {SAMPLE.map((l, i) => (
