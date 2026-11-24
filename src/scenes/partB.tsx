@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { rv } from '../deck'
 import type { SceneDef } from '../deck'
 import { Arrow, Check, Cross, NonT, Term, TreeNode } from '../ui'
-import { Change, Glossary, NativeResults, StageArrays, StageBytes, StageElf, StageExceptions, StageFlow, StageFunctions, StageReals, StageStack } from './native'
+import { Change, NativeResults, Stages } from './native'
 import { FileAst, FileElf, FileEnc, FileGen, FileMain, FileRuntime, FileRuntimeArrays, FileSemantic, Handoff } from './files'
 
 const abs = (left: number, top: number, width?: number): CSSProperties => ({ position: 'absolute', left, top, width })
@@ -239,54 +239,6 @@ function Ast({ step }: { step: number }) {
   )
 }
 
-/* ------------------------------------------------ B4: ámbitos */
-
-const SCOPE_CODE = ['int x = 1;', '{', '    int x = 2;', '    {', '        print(x);', '    }', '}', 'print(x);']
-
-function Scopes({ step }: { step: number }) {
-  const box = (extra: CSSProperties): CSSProperties => ({ border: '4px solid var(--ink)', padding: '14px 20px 20px', ...extra })
-  const entry = (text: string, hot: boolean) => (
-    <span className="chip" style={{ background: hot ? 'var(--line)' : '#fff', color: hot ? '#fff' : 'var(--ink)', transition: 'background 0.4s, color 0.4s' }}>{text}</span>
-  )
-  return (
-    <>
-      <h2>Cada bloque tiene su propia tabla de símbolos</h2>
-      <div className="body">
-        <div className="plate" style={{ ...abs(0, 0, 470), lineHeight: '42px' }}>
-          {SCOPE_CODE.map((l, i) => (
-            <div key={i} className={(i === 4 && step === 2) || (i === 7 && step === 3) ? 'hl' : undefined}>{l}</div>
-          ))}
-        </div>
-        <div className={rv(step, 1)} style={{ ...abs(540, 0, 916), ...box({ background: '#fff' }) }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <span className="lead" style={{ fontSize: 26 }}>ámbito global</span>{entry('x → v_x_1', step === 3)}
-          </div>
-          <div style={box({ background: 'var(--ground)' })}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span className="lead" style={{ fontSize: 26 }}>bloque</span>{entry('x → v_x_2', step === 2)}
-            </div>
-            <div style={box({ background: '#fff' })}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="lead" style={{ fontSize: 26 }}>bloque interno</span>
-                <span className="note" style={{ fontSize: 24 }}>sin símbolos propios</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p className={rv(step, 2, 'lead')} style={{ ...abs(540, 316, 916), fontSize: 28, opacity: step === 2 ? 1 : 0 }}>
-          El print interno busca x en su ámbito, no la encuentra y sube. La primera que aparece es v_x_2: imprime 2.
-        </p>
-        <p className={rv(step, 3, 'lead')} style={{ ...abs(540, 316, 916), fontSize: 28 }}>
-          El print externo solo ve el ámbito global y encuentra v_x_1: imprime 1. La x interna ocultó a la externa sin modificarla.
-        </p>
-        <p className="note" style={{ ...abs(0, 410, 470), fontSize: 24 }}>
-          Cada variable recibe un número único; con ese nombre aparece luego en el código C.
-        </p>
-      </div>
-    </>
-  )
-}
-
 /* -------------------------------------------------- B5: tipos */
 
 function Types({ step }: { step: number }) {
@@ -383,238 +335,6 @@ function Overload({ step }: { step: number }) {
   )
 }
 
-/* --------------------------------------------- B7: generación de código */
-
-const MAPPING = [
-  ['int · float', 'long long · double'],
-  ['vector<T> · matrix<T>', 'VxArr'],
-  ['función f', 'f_f_N  (anidada en main)'],
-  ['a / b', 'vx_idiv(a, b, línea)'],
-  ['v[i]', 'vx_get(v, i, línea, …)'],
-  ['try / catch', 'setjmp / longjmp'],
-] as const
-
-/** Lo que escribe cada nodo, en el orden del recorrido (postorden). */
-const EMITS = [
-  { node: 'x  2  3', c: 'v_x_1    2LL    3LL' },
-  { node: '*', c: '(2LL * 3LL)' },
-  { node: '+', c: '(v_x_1 + (2LL * 3LL))' },
-  { node: 'VARDECL', c: 'double v_y_2 =\n  ((double)((v_x_1 + (2LL * 3LL))));' },
-]
-
-/** Salida real de ./vortexc con int x = 1; float y = x + 2 * 3; print(y); */
-const EJ_C = [
-  '#include "vx_runtime.h"',
-  '',
-  'int main(void) {',
-  '    long long v_x_1 = 1LL;',
-  '    double v_y_2 = ((double)((v_x_1',
-  '                   + (2LL * 3LL))));',
-  '    {',
-  '        double vx_p_1 = v_y_2;',
-  '        vx_print_f(vx_p_1);',
-  "        putchar('\\n');",
-  '    }',
-  '    return 0;',
-  '}',
-]
-
-function Codegen({ step }: { step: number }) {
-  const walking = step <= 4
-  return (
-    <>
-      <h2>Primer enfoque: recorrer el árbol y escribir C</h2>
-      <div className="body">
-        {/* Izquierda: el árbol anotado que se recorre; al final, el patrón general */}
-        <div className={step < 6 ? 'rv on' : 'rv'} style={abs(0, 0)}>
-          <ExampleTree built={4} typed={3} hot={walking ? step : 0} />
-        </div>
-        <div className={rv(step, 6)} style={abs(0, 0, 760)}>
-          <p style={{ font: '800 26px var(--sans)', marginBottom: 10 }}>El resto del lenguaje sigue el mismo patrón</p>
-          <div className="rule" style={{ marginBottom: 8 }} />
-          {MAPPING.map(([vx, c]) => (
-            <div key={vx} style={{ display: 'grid', gridTemplateColumns: '350px 1fr', height: 50, alignItems: 'center' }}>
-              <span className="mono" style={{ fontSize: 24, fontWeight: 600 }}>{vx}</span>
-              <span className="mono" style={{ fontSize: 24 }}>{c}</span>
-            </div>
-          ))}
-          <p className="note" style={{ marginTop: 18, fontSize: 25 }}>
-            codegen.c no reporta errores: recibe un árbol que ya se sabe correcto.
-          </p>
-        </div>
-
-        {/* Derecha: lo que escribe cada nodo */}
-        <div className={step < 5 ? 'rv on' : 'rv'} style={abs(800, 0, 656)}>
-          <p className="lead" style={{ fontSize: 28, marginBottom: 20 }}>
-            {step === 0
-              ? 'codegen.c visita primero los hijos y después el nodo: cada nodo escribe su C con el C de sus hijos.'
-              : 'C que escribe cada nodo'}
-          </p>
-          {EMITS.map((e, i) => (
-            <div key={e.node} className={rv(step, i + 1)} style={{ display: 'grid', gridTemplateColumns: '130px 1fr', alignItems: 'start', marginBottom: 14 }}>
-              <span className="tag" style={{ justifySelf: 'start', marginTop: 8 }}>{e.node}</span>
-              <div
-                className="plate small"
-                style={{ padding: '8px 14px', fontSize: 22, background: step === i + 1 ? 'color-mix(in srgb, var(--gen) 30%, #fff)' : '#fff', transition: 'background 0.4s' }}
-              >
-                {e.c}
-              </div>
-            </div>
-          ))}
-          <p className={rv(step, 4, 'note')} style={{ fontSize: 24 }}>
-            double y el cast salen de la anotación int → float; v_x_1 y v_y_2, de la tabla de símbolos.
-          </p>
-        </div>
-
-        {/* Derecha, al final: el archivo completo que produce vortexc */}
-        <div className={rv(step, 5)} style={abs(800, 0, 656)}>
-          <p style={{ font: '800 26px var(--sans)', marginBottom: 10 }}>
-            ej.c&nbsp;<span style={{ fontWeight: 600, color: 'var(--ink-soft)' }}>· lo que escribe ./vortexc ej.vx</span>
-          </p>
-          <div className="plate" style={{ fontSize: 22, lineHeight: '31px', padding: '12px 20px' }}>
-            {EJ_C.map((l, i) => (
-              <div key={i} className={i === 4 || i === 5 ? 'hl' : undefined}>{l || ' '}</div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ---------------------------------- Flujo: de demo.c al ejecutable */
-
-const GSTOPS = [
-  { x: 70, file: 'demo.c', meta: '48 líneas', wagon: '.c' },
-  { x: 400, file: 'demo.i', meta: '2923 líneas', wagon: '.i' },
-  { x: 730, file: 'demo.s', meta: '2656 líneas', wagon: '.s' },
-  { x: 1060, file: 'demo.o', meta: '17 256 bytes', wagon: '.o' },
-  { x: 1386, file: 'demo', meta: '22 248 bytes', wagon: 'ELF' },
-]
-const GTOOLS = ['preprocesador', 'compilador', 'ensamblador', 'enlazador']
-
-/** Una línea del ejemplo con su explicación al lado. */
-const said = (rows: [string, string][]) => rows.map(([code, what], i) => (
-  <div key={i} style={{ display: 'grid', gridTemplateColumns: '400px 1fr' }}>
-    <span>{code}</span>
-    <span style={{ fontFamily: 'var(--sans)', fontWeight: 600, color: 'var(--gen)' }}>{what}</span>
-  </div>
-))
-
-type Panel = { tag: string; title: string; text: string; out?: boolean; body: ReactNode }
-const PANELS: Panel[] = [
-  {
-    tag: 'demo.c', title: 'El punto de partida',
-    text: 'Nuestro compilador traducía Vortex a lenguaje C. El resto del camino lo hacía GCC, en cuatro pasos.',
-    body: (
-      <>
-        <span style={{ color: 'var(--ink-soft)' }}>{'// Vortex:   print(n - 1);\n// C:\n'}</span>
-        {'#include "vx_runtime.h"\nint main(void) {\n    …\n    vx_print_i(v_n_2 - 1LL);'}
-      </>
-    ),
-  },
-  {
-    tag: 'preprocesador', title: '1. Copiar y pegar',
-    text: 'Donde dice #include, pega el contenido de ese archivo. Las 48 líneas se vuelven casi 3000.',
-    body: (
-      <>
-        <span className="hl">{'#include "vx_runtime.h"'}</span>
-        {'\n      ↓  se reemplaza por\n'}
-        <span style={{ color: 'var(--ink-soft)' }}>{'  … 2858 líneas de declaraciones\n    (printf, malloc, setjmp …)\n'}</span>
-      </>
-    ),
-  },
-  {
-    tag: 'compilador', title: '2. De C a ensamblador',
-    text: 'Traduce cada línea de C a instrucciones del procesador, todavía escritas como texto.',
-    out: true,
-    body: said([
-      ['v_n_2 - 1LL', 'en C: n − 1'],
-      ['  movq  -40(%rbp), %rax', 'trae n'],
-      ['  subq  $1, %rax', 'réstale 1'],
-      ['  call  vx_print_i', 'imprime'],
-    ]),
-  },
-  {
-    tag: 'ensamblador', title: '3. De texto a números',
-    text: 'Cambia cada instrucción por su código en bytes. Lo que vive en otro archivo, como printf, queda como un hueco.',
-    out: true,
-    body: said([
-      ['subq $1, %rax', '→  48 83 E8 01'],
-      ['call printf', '→  E8 ?? ?? ?? ??'],
-      ['', '¿dónde está printf? aún no se sabe'],
-    ]),
-  },
-  {
-    tag: 'enlazador', title: '4. Llenar los huecos',
-    text: 'Junta nuestro código con la biblioteca de C (libc), donde están printf y compañía. Cada hueco recibe su dirección.',
-    out: true,
-    body: said([
-      ['demo.o  +  libc', '→  demo'],
-      ['printf', '→  lo trae libc'],
-      ['', 'resultado: el ejecutable'],
-    ]),
-  },
-  {
-    tag: './demo', title: 'Ejecutar',
-    text: 'Al correrlo, Linux carga también la biblioteca de C. Sin ella el programa no funciona.',
-    out: true,
-    body: '$ ./demo\nfact(5) = 120 | sum = 12',
-  },
-]
-
-function Flow({ step }: { step: number }) {
-  const at = Math.min(step, 4)
-  return (
-    <>
-      <h2>Primer enfoque: GCC hacía todo lo demás</h2>
-      <div className="body">
-        <svg width="1456" height="220" viewBox="0 0 1456 220" style={{ position: 'absolute', left: 0, top: 0 }}>
-          {/* La vía completa en guía fina; el tramo recorrido se pinta */}
-          <path className="guide" d={`M${GSTOPS[0].x} 96 H${GSTOPS[4].x}`} />
-          {GSTOPS.slice(1).map((s, i) => {
-            const from = GSTOPS[i].x
-            const mid = (from + s.x) / 2
-            const tool = GTOOLS[i]
-            return (
-              <g key={s.file}>
-                <path className={rv(step, i + 1, 'gtrack draw')} style={{ opacity: 1, transform: 'none' }} stroke="var(--gen)" pathLength={1} d={`M${from} 96 H${s.x}`} />
-                <rect x={mid - (tool.length * 15 + 24) / 2} y={20} width={tool.length * 15 + 24} height={36} fill={step === i + 1 ? 'var(--gen)' : 'var(--ink)'} style={{ transition: 'fill 0.4s' }} />
-                <text className="st sm" x={mid} y={46} textAnchor="middle" style={{ fill: step === i + 1 ? 'var(--ink)' : 'var(--ground)' }}>{tool}</text>
-              </g>
-            )
-          })}
-          {GSTOPS.map((s, i) => (
-            <g key={s.file}>
-              <circle className={`gstop${i < at ? ' done' : ''}`} cx={s.x} cy={96} r={15} />
-              <text className="st big" x={s.x} y={168} textAnchor={i === 0 ? 'start' : i === 4 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 4 ? 20 : 0}>{s.file}</text>
-              <text className={rv(step, i, 'sl sm soft')} x={s.x} y={202} textAnchor={i === 0 ? 'start' : i === 4 ? 'end' : 'middle'} dx={i === 0 ? -20 : i === 4 ? 20 : 0}>{s.meta}</text>
-            </g>
-          ))}
-          {/* El vagón: el mismo programa, cambiando de forma en cada estación */}
-          <g className="wagon" style={{ transform: `translateX(${GSTOPS[at].x}px)` }}>
-            <rect x={-54} y={70} width={108} height={52} fill={step === 5 ? 'var(--sem)' : 'var(--ink)'} style={{ transition: 'fill 0.4s' }} />
-            <text className="st inv" x={0} y={105} textAnchor="middle" style={{ fontSize: 28 }}>{GSTOPS[at].wagon}</text>
-          </g>
-        </svg>
-
-        {PANELS.map((p, i) => (
-          <div key={p.tag} className={`panel${step === i ? ' on' : ''}`}>
-            <div>
-              <span className="tag">{p.tag}</span>
-              <h3>{p.title}</h3>
-              <p className="lead" style={{ fontSize: 26 }}>{p.text}</p>
-            </div>
-            <div className={p.out ? 'plate out' : 'plate'} style={{ fontSize: 22, lineHeight: '32px', padding: '14px 20px', alignSelf: 'start', marginTop: 8 }}>
-              {p.body}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  )
-}
-
 /* ---------------------------------------------------- Cierre */
 
 function Closing() {
@@ -643,22 +363,12 @@ export const PART_B: SceneDef[] = [
   { id: 'archivo-runtime', part: 'extra', station: 4, steps: 2, render: (s) => <FileRuntime step={s} /> },
   { id: 'archivo-runtime-arrays', part: 'extra', station: 4, steps: 2, render: (s) => <FileRuntimeArrays step={s} /> },
   { id: 'ast', part: 'extra', station: 2, steps: 3, render: (s) => <Ast step={s} /> },
-  { id: 'ambitos', part: 'extra', station: 3, steps: 3, render: (s) => <Scopes step={s} /> },
   { id: 'tipos', part: 'extra', station: 3, steps: 4, render: (s) => <Types step={s} /> },
-  { id: 'sobrecarga', part: 'extra', station: 3, steps: 3, render: (s) => <Overload step={s} /> },  /* Primer enfoque: traducir a C y dejar el resto a GCC */
-  { id: 'enfoque-c', part: 'extra', route: 'c', station: 4, steps: 6, render: (s) => <Codegen step={s} /> },
-  { id: 'enfoque-gcc', part: 'extra', route: 'c', station: 5, steps: 5, render: (s) => <Flow step={s} /> },
-  /* El cambio y las siete etapas del backend propio */
+  { id: 'sobrecarga', part: 'extra', station: 3, steps: 3, render: (s) => <Overload step={s} /> },
+  /* El cambio: del primer enfoque (C y GCC) al backend propio */
   { id: 'cambio', part: 'extra', route: (s) => (s >= 2 ? 'native' : 'c'), station: 4, steps: 3, render: (s) => <Change step={s} /> },
-  { id: 'vocabulario', part: 'extra', station: 4, steps: 3, render: (s) => <Glossary step={s} /> },
-  { id: 'etapa-1-bytes', part: 'extra', station: 5, steps: 3, render: (s) => <StageBytes step={s} /> },
-  { id: 'etapa-1-elf', part: 'extra', station: 5, steps: 2, render: (s) => <StageElf step={s} /> },
-  { id: 'etapa-2-pila', part: 'extra', station: 4, steps: 6, render: (s) => <StageStack step={s} /> },
-  { id: 'etapa-3-saltos', part: 'extra', station: 4, steps: 5, render: (s) => <StageFlow step={s} /> },
-  { id: 'etapa-4-funciones', part: 'extra', station: 4, steps: 5, render: (s) => <StageFunctions step={s} /> },
-  { id: 'etapa-5-reales', part: 'extra', station: 4, steps: 4, render: (s) => <StageReals step={s} /> },
-  { id: 'etapa-6-excepciones', part: 'extra', station: 4, steps: 4, render: (s) => <StageExceptions step={s} /> },
-  { id: 'etapa-7-arreglos', part: 'extra', station: 4, steps: 4, render: (s) => <StageArrays step={s} /> },
+  /* Las siete etapas del backend propio */
+  { id: 'etapas', part: 'extra', station: 5, steps: 8, render: (s) => <Stages step={s} /> },
   { id: 'resultados', part: 'extra', station: 5, steps: 1, render: (s) => <NativeResults step={s} /> },
   { id: 'cierre', part: 'extra', station: 5, steps: 0, render: () => <Closing /> },
 ]
