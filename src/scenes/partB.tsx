@@ -2,7 +2,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import { rv } from '../deck'
 import type { SceneDef } from '../deck'
 import { Arrow, Check, Cross, NonT, Term, TreeNode } from '../ui'
-import { Change, NativeResults, Stages } from './native'
+import { Change, Stages } from './native'
+import { BuildAnimation } from './animation'
 import { FileAst, FileElf, FileEnc, FileGen, FileMain, FileRuntime, FileRuntimeArrays, FileSemantic, Handoff } from './files'
 
 const abs = (left: number, top: number, width?: number): CSSProperties => ({ position: 'absolute', left, top, width })
@@ -369,6 +370,6 @@ export const PART_B: SceneDef[] = [
   { id: 'cambio', part: 'extra', route: (s) => (s >= 2 ? 'native' : 'c'), station: 4, steps: 3, render: (s) => <Change step={s} /> },
   /* Las siete etapas del backend propio */
   { id: 'etapas', part: 'extra', station: 5, steps: 8, render: (s) => <Stages step={s} /> },
-  { id: 'resultados', part: 'extra', station: 5, steps: 1, render: (s) => <NativeResults step={s} /> },
+  { id: 'animacion', part: 'extra', station: 5, steps: 1, render: (s) => <BuildAnimation step={s} /> },
   { id: 'cierre', part: 'extra', station: 5, steps: 0, render: () => <Closing /> },
 ]

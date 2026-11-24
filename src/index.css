@@ -168,3 +168,19 @@ svg { overflow: visible; }
   .node, .fade, .gstop, .wagon, .panel { transition: none; }
   .scene, .rail .swap { animation: none; }
 }
+
+/* Subtítulo de la animación de las etapas: aparece, se queda y se va */
+@keyframes caption {
+  0% { opacity: 0; transform: translateY(10px); }
+  15% { opacity: 1; transform: none; }
+  85% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+/* Animación de las etapas: el dibujo aparece en el centro y baja a su hueco */
+@keyframes stage-fly {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  14% { opacity: 1; transform: translate(0, 0) scale(1); }
+  70% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(var(--s)); }
+}

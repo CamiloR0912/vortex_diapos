@@ -1,7 +1,7 @@
 /* Escenas del backend propio: el cambio de enfoque, las siete etapas en
    resumen y el resultado. El detalle técnico está en las diapositivas de
    cada archivo (files.tsx). */
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { rv } from '../deck'
 
 const abs = (left: number, top: number, width?: number): CSSProperties => ({ position: 'absolute', left, top, width })
@@ -45,7 +45,7 @@ export function Change({ step }: { step: number }) {
 
 /* ------------------------------------------- Las siete etapas, en resumen */
 
-const STAGES: { title: string; what: string; works: string }[] = [
+export const STAGES: { title: string; what: string; works: string }[] = [
   { title: 'Bytes y ELF', what: 'Escribir instrucciones en bytes y armar un archivo que Linux acepte como ejecutable.', works: 'programa vacío' },
   { title: 'Enteros y print', what: 'Variables enteras, operaciones + − * / y nuestra propia rutina para imprimir.', works: 'print(a + b*3)' },
   { title: 'Control de flujo', what: 'if, while, for, switch, break y continue, convertidos en saltos.', works: 'if, while, for' },
@@ -108,34 +108,4 @@ export function Stages({ step }: { step: number }) {
   )
 }
 
-/* ----------------------------------------------------- Resultados */
 
-const COMPARE: [string, ReactNode, ReactNode][] = [
-  ['Programas externos al compilar', 'gcc: cc1, as y ld', 'ninguno'],
-  ['Biblioteca dentro del programa', 'libc, enlazada al ejecutar', 'ninguna: write, mmap y exit'],
-  ['Ejecutable de demo.vx', '22 248 bytes, dinámico', '14 137 bytes, estático'],
-  ['Las 33 pruebas originales', '33 de 33', '33 de 33, misma salida byte a byte'],
-]
-
-export function NativeResults({ step }: { step: number }) {
-  return (
-    <>
-      <h2>Resultado: el mismo Vortex, sin GCC</h2>
-      <div className="body">
-        <div style={{ display: 'grid', gridTemplateColumns: '470px 430px 1fr', columnGap: 28, marginBottom: 8 }}>
-          <span />
-          <span className="lead" style={{ fontSize: 26 }}>Primer enfoque</span>
-          <span className="lead" style={{ fontSize: 26 }}>Backend propio</span>
-        </div>
-        <div className="rule" />
-        {COMPARE.map(([what, before, now], i) => (
-          <div key={what} className={rv(step, i === 0 ? 0 : 1)} style={{ display: 'grid', gridTemplateColumns: '470px 430px 1fr', columnGap: 28, alignItems: 'center', height: 64, borderBottom: '2px solid color-mix(in srgb, var(--ink) 25%, transparent)' }}>
-            <span className="lead" style={{ fontSize: 26 }}>{what}</span>
-            <span className="note" style={{ fontSize: 25 }}>{before}</span>
-            <span className="lead" style={{ fontSize: 26 }}>{now}</span>
-          </div>
-        ))}
-      </div>
-    </>
-  )
-}
